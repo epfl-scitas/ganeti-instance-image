@@ -306,7 +306,10 @@ map_partition() {
     for dev in "${filesystem_dev}-"*; do
         [ ! -b "${dev}" ] || continue
         # see https://uapi-group.org/specifications/specs/discoverable_partitions_specification/
-        case $(blkid -p -s PART_ENTRY_TYPE -o value "${dev}" 2>/dev/null) in
+        case $(lsblk -n -o PARTTYPE "${dev}" 2>/dev/null) in
+        C12A7328-F81F-11D2-BA4B-00A0C93EC93B)
+            # EFI boot partition
+            boot_dev="${dev}" ;;
         21686148-6449-6e6f-744e-656564454649)
             # BIOS boot partition
             boot_dev="${dev}" ;;
