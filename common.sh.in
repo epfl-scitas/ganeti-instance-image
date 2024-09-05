@@ -418,13 +418,8 @@ setup_console() {
             sed -i -e 's/.*ttyS0.*/s0:12345:respawn:\/sbin\/agetty 115200 ttyS0 vt100/' \
                 ${target}/etc/inittab
             ;;
-        centos|redhat)
-            echo "s0:12345:respawn:/sbin/agetty 115200 ttyS0 vt100" >> \
-                ${target}/etc/inittab
-            ;;
-        debian|ubuntu)
-            sed -i -e 's/.*T0.*/T0:23:respawn:\/sbin\/getty -L ttyS0 115200 vt100/' \
-                ${target}/etc/inittab
+        centos|redhat|debian|ubuntu)
+            ln -s ${target}/lib/systemd/system/getty\@.service ${target}/etc/systemd/system/getty.target.wants/getty\@ttyS0.service
             ;;
         *)
             echo "No support for your OS in instance-image, skipping..."
