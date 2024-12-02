@@ -116,6 +116,8 @@ get_os_type() {
         OS_TYPE="gentoo"
     elif [ -e ${target}/etc/SuSE-release ] ; then
         OS_TYPE="suse"
+    elif [ -e ${target}/etc/almalinux-release ] ; then
+        OS_TYPE="redhat"
     fi
 }
 
@@ -134,6 +136,8 @@ get_os() {
         OPERATING_SYSTEM="gentoo"
     elif [ -e ${target}/etc/fedora-release ] ; then
         OPERATING_SYSTEM="fedora"
+    elif [ -e ${target}/etc/almalinux-release ] ; then
+        OPERATING_SYSTEM="redhat"
     elif [ -e ${target}/etc/redhat-release ] ; then
         if [ -n "$(grep -i centos ${target}/etc/redhat-release)" ] ; then
             OPERATING_SYSTEM="centos"
@@ -304,18 +308,24 @@ map_partition() {
     local partition="$2"
     local dev
     for dev in "${filesystem_dev}-"*; do
-        [ ! -b "${dev}" ] || continue
+	    [ ! -b "${dev}" ] && continue
         # see https://uapi-group.org/specifications/specs/discoverable_partitions_specification/
+        #case $(blkid -p -s PART_ENTRY_TYPE -o value "${dev}" 2>/dev/null) in
         case $(lsblk -n -o PARTTYPE "${dev}" 2>/dev/null) in
         C12A7328-F81F-11D2-BA4B-00A0C93EC93B)
             # EFI boot partition
             boot_dev="${dev}" ;;
+        c12a7328-f81f-11d2-ba4b-00a0c93ec93b)
+            # EFI boot partition
+            boot_dev="${dev}" ;;
         21686148-6449-6e6f-744e-656564454649)
             # BIOS boot partition
+	    [ -z "boot_dev" ] || continue
             boot_dev="${dev}" ;;
         0fc63daf-8483-4772-8e79-3d69d8477de4)
             # first generic data partition
-            generic_dev="${generic_dev:-${dev}}" ;;
+            generic_dev="${dev}" ;; #hackish SCITAS
+            #generic_dev="${generic_dev:-${dev}}" ;;
         0657fd6d-a4ab-43c4-84e5-0933c84b4f4f)
             # swap
             swap_dev="${dev}" ;;
@@ -401,14 +411,36 @@ setup_console() {
         log_error "target not set for setup_console"
         exit 1
     fi
+#    # Upstart is on this system, so do this instead
+#    if [ -e ${target}/etc/event.d/tty1 ] ; then
+#        cat ${target}/etc/event.d/tty1 | sed -re 's/tty1/ttyS0/' \
+#            > ${target}/etc/event.d/ttyS0
+#        return
+#    fi
+#    # upstart in karmic and newer
+#    if [ -e ${target}/etc/init/tty1.conf ] ; then
+#        cat ${target}/etc/init/tty1.conf | \
+#        sed -re 's/^exec.*/exec \/sbin\/getty -L 115200 ttyS0 vt102/' \
+#            > ${target}/etc/init/ttyS0.conf
+#        sed -ie 's/tty1/ttyS0/g' ${target}/etc/init/ttyS0.conf
+#        return
+#    fi
     get_os $target
     case $OPERATING_SYSTEM in
         gentoo)
-            sed -i -e 's/.*ttyS0.*/s0:12345:respawn:\/sbin\/agetty 115200 ttyS0 vt100/' \
-                ${target}/etc/inittab
+	    ln -s ${target}/lib/systemd/system/getty\@.service ${target}/etc/systemd/system/getty.target.wants/getty\@ttyS0.service
+           # sed -i -e 's/.*ttyS0.*/s0:12345:respawn:\/sbin\/agetty 115200 ttyS0 vt100/' \
+           #     ${target}/etc/inittab
             ;;
-        centos|redhat|debian|ubuntu)
-            ln -s ${target}/lib/systemd/system/getty\@.service ${target}/etc/systemd/system/getty.target.wants/getty\@ttyS0.service
+        centos|redhat)
+	    ln -s ${target}/lib/systemd/system/getty\@.service ${target}/etc/systemd/system/getty.target.wants/getty\@ttyS0.service
+            #echo "s0:12345:respawn:/sbin/agetty 115200 ttyS0 vt100" >> \
+            #    ${target}/etc/inittab
+            ;;
+        debian|ubuntu)
+	    ln -s ${target}/lib/systemd/system/getty\@.service ${target}/etc/systemd/system/getty.target.wants/getty\@ttyS0.service
+            #sed -i -e 's/.*T0.*/T0:23:respawn:\/sbin\/getty -L ttyS0 115200 vt100/' \
+            #    ${target}/etc/inittab
             ;;
         *)
             echo "No support for your OS in instance-image, skipping..."
